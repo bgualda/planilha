@@ -13,16 +13,17 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.math.BigDecimal;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import org.apache.poi.hpsf.Constants;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
@@ -35,22 +36,20 @@ public class PlanilhaUtils {
     private XSSFWorkbook wb;
     private AccwebUtils accwebUtils;
     private String path;
-    private Double salarioBruto;
-    private BigDecimal valorHoraExtra;
     private Double totalExtra;
 
     public PlanilhaUtils() {
 
     }
 
-    public PlanilhaUtils(String path, String user, String pass, Double salarioBruto) {
+    public PlanilhaUtils(String path, String user, String pass) {
         try {
             this.path = path;
-            this.salarioBruto = salarioBruto;
+
             this.totalExtra = 0d;
             setWb(path);
             accwebUtils = new AccwebUtils(user, pass);
-            valorHoraExtra = BigDecimal.ZERO;
+
         } catch (IOException ex) {
             ex.printStackTrace();
         }
@@ -62,10 +61,10 @@ public class PlanilhaUtils {
 
     public void setWb(String path) {
         try {
-            System.out.print("Abrindo planilha");
+            System.out.print("Abrindo planilha..");
             InputStream ExcelFileToRead = new FileInputStream(path);
             wb = new XSSFWorkbook(ExcelFileToRead);
-            System.out.print("...\n");
+            System.out.print(".OK\n");
         } catch (Exception ex) {
             System.out.println(ex.toString());
             ex.printStackTrace();
@@ -93,9 +92,6 @@ public class PlanilhaUtils {
 
             if (linha != null) {
                 linhas.add(linha);
-                if (salarioBruto > 0) {
-                    calcularHorasExtras(atividadeListVO.getTotalHoras());
-                }
             }
         }
         return linhas;
@@ -103,47 +99,78 @@ public class PlanilhaUtils {
 
     public LinhaVO transformToLinhaVO(AtividadeListVO atividadeList, int indice) {
         if (atividadeList != null && atividadeList.getAtividades().size() > 0) {
-            LinhaVO linha = new LinhaVO();
             Collections.sort(atividadeList.getAtividades());
+
+            LinhaVO linha = new LinhaVO();
             linha.setIndice(indice);
 
-            int i = 0;
-            Double totalHoras = 0d;
-            Date aux = new Date();
+            boolean[] horas = new boolean[48];
 
-            for (AtividadeVO atividade : atividadeList.getAtividades()) {
-                totalHoras += atividade.getHoras();
-                if (i == 0) {
-                    linha.setInicio(atividade.getInicio());
-                    aux = adicionarHorasDate(atividade.getInicio(), atividade.getHoras());
-                } else {
-                    if (aux.compareTo(atividade.getInicio()) != 0) {
-                        linha.setInicioAlmoco(aux);
-                        linha.setSaidaAlmoco(atividade.getInicio());
-                        aux = adicionarHorasDate(atividade.getInicio(), atividade.getHoras());
-                        linha.setSaida(aux);
-                    } else {
-                        aux = adicionarHorasDate(atividade.getInicio(), atividade.getHoras());
-                        linha.setSaidaExtra(aux);
+            Iterator it = atividadeList.getAtividades().iterator();
 
-                    }
-                    if (totalHoras == Constantes.CARGA_HORARIA) {
-                        linha.setSaida(aux);
-                    } else {
-                        Double horaSaida = totalHoras - Constantes.CARGA_HORARIA;
-                        Date saida = subtrairHorasDate(aux, horaSaida);
-                        linha.setSaida(saida);
-                        linha.setInicioExtra(saida);
-                    }
+            while (it.hasNext()) {
+                AtividadeVO ativ = (AtividadeVO) it.next();
+                int hora = ativ.getInicio().getHours();
+                int minuto = ativ.getInicio().getMinutes();
+                int idc = hora * 2;
+
+                if (minuto >= 30) {
+                    idc++;
                 }
-                i++;
-            }
-            if (totalHoras == Constantes.CARGA_HORARIA) {
-                linha.setInicioExtra(null);
-                linha.setSaidaExtra(null);
+
+                int posicoes = (int) (ativ.getHoras() / 0.5d);
+
+                for (int i = 0; i < posicoes; i++) {
+                    horas[idc + i] = true;
+                }
             }
 
-            linha.setInicio(atividadeList.getAtividades().get(0).getInicio());
+            boolean inicio = false;
+            boolean inicioAlmoco = false;
+            boolean fimAlmoco = false;
+            boolean fim = false;
+            boolean inicioExtra = false;
+            boolean fimExtra = false;
+
+            Double totalHoras = 0d;
+
+            Date data = atividadeList.getData();
+            for (int i = 0; i < horas.length; i++) {
+
+                if (horas[i] && !inicio) {
+                    inicio = true;
+                    linha.setInicio(setHorasDate(data, (i / 2d)));
+                }
+                if (!horas[i] && !inicioAlmoco && inicio) {
+                    inicioAlmoco = true;
+                    linha.setInicioAlmoco(setHorasDate(data, ((i) / 2d)));
+                }
+
+                if (horas[i] && inicioAlmoco && inicio && !fimAlmoco) {
+                    fimAlmoco = true;
+                    linha.setSaidaAlmoco(setHorasDate(data, ((i) / 2d)));
+                }
+
+                if ((!horas[i] || totalHoras == Constantes.CARGA_HORARIA) && inicioAlmoco && inicio && fimAlmoco && !fim) {
+                    fim = true;
+                    linha.setSaida(setHorasDate(data, ((i) / 2d)));
+                }
+
+                if (horas[i] && totalHoras == Constantes.CARGA_HORARIA  && fim) {
+                    inicioExtra = true;
+                    linha.setInicioExtra(setHorasDate(data, ((i) / 2d)));
+                }
+                if (!horas[i] && inicioExtra && !fimExtra) {
+                    fimExtra = true;
+                    linha.setSaidaExtra(setHorasDate(data, ((i) / 2d)));
+                }
+
+                if (horas[i]) {
+                    totalHoras += 0.5d;
+                }
+
+            }
+            System.out.println(linha.toString());
             return linha;
         } else {
             return null;
@@ -153,6 +180,20 @@ public class PlanilhaUtils {
     public Date adicionarHorasDate(Date data, Double horas) {
         Calendar cal = Calendar.getInstance();
         cal.setTime(data);
+        cal.add(Calendar.HOUR_OF_DAY, horas.intValue());
+        if ((horas - horas.intValue()) == 0.5d) {
+            cal.add(Calendar.MINUTE, 30);
+        }
+
+        return cal.getTime();
+    }
+
+    public Date setHorasDate(Date data, Double horas) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(data);
+        cal.clear(Calendar.HOUR);
+        cal.clear(Calendar.MINUTE);
+
         cal.add(Calendar.HOUR_OF_DAY, horas.intValue());
         if ((horas - horas.intValue()) == 0.5d) {
             cal.add(Calendar.MINUTE, 30);
@@ -202,7 +243,6 @@ public class PlanilhaUtils {
                 sheet.getRow(linha.getIndice()).getCell(4).setCellValue(adicionarMargemHora(linha.getSaida()));
             }
             if (null != linha.getInicioExtra()) {
-                sheet.getRow(linha.getIndice()).getCell(4).setCellValue(linha.getInicioExtra());
                 sheet.getRow(linha.getIndice()).getCell(5).setCellValue(linha.getInicioExtra());
             }
             if (null != linha.getSaidaExtra()) {
@@ -216,27 +256,5 @@ public class PlanilhaUtils {
         fileOut.close();
         System.out.print("...sucesso.\n");
 
-        if (salarioBruto > 0) {
-            System.out.println("Você fez " + totalExtra + " Hora(s) extras este mês.");
-            System.out.println("Previsão de valor: R$ " + valorHoraExtra);
-        }
-
     }
-
-    public void calcularHorasExtras(Double totalHoras) {
-        Double qtdExtra = totalHoras - Constantes.CARGA_HORARIA;
-        if (qtdExtra > 0) {
-            totalExtra = totalExtra + qtdExtra;
-            if (qtdExtra <= 2) {
-                Double d = ((salarioBruto / 200) * Constantes.FATOR_HR_EXTRA_75) * qtdExtra;
-                valorHoraExtra = valorHoraExtra.add(new BigDecimal(d));
-            } else {
-                Double d = ((salarioBruto / 200) * Constantes.FATOR_HR_EXTRA_75) * 2;
-                Double e = ((salarioBruto / 200) * Constantes.FATOR_HR_EXTRA_100) * (qtdExtra - 2);
-                valorHoraExtra = valorHoraExtra.add(new BigDecimal(d));
-                valorHoraExtra = valorHoraExtra.add(new BigDecimal(e));
-            }
-        }
-    }
-
 }

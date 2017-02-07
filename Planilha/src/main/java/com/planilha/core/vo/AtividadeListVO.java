@@ -27,11 +27,11 @@ public class AtividadeListVO {
     }
 
     public Double getTotalHoras() {
+        this.totalHoras = 0d;
+        for(AtividadeVO ativ : getAtividades()){
+            totalHoras += ativ.getHoras();
+        }                
         return totalHoras;
-    }
-
-    public void setTotalHoras(Double totalHoras) {
-        this.totalHoras = totalHoras;
     }
 
     public List<AtividadeVO> getAtividades() {

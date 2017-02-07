@@ -83,9 +83,9 @@ public class AccwebUtils {
     }
 
     public String getURL(Date date) {
-        SimpleDateFormat format = new SimpleDateFormat("dd/MM");
+        SimpleDateFormat format = new SimpleDateFormat("dd/MM/yyyy");
         String url = URL_HORAS;
-        url = url.concat(format.format(date)).concat("/2016");
+        url = url.concat(format.format(date));
         return url;
     }
 
@@ -121,7 +121,6 @@ public class AccwebUtils {
 
         atividadeListVO.setAtividades(atividades);
         atividadeListVO.setData(dataAtividade);
-        atividadeListVO.setTotalHoras(totalHoras);
         if(totalHoras != 0)
             System.out.println("Atividades encontradas. Data:"+dataAtividade+" Total Horas: "+totalHoras+" qtdAtividades: "+atividades.size());
         return atividadeListVO;

@@ -19,12 +19,8 @@ public class Planilha {
               String path = args[0];
               String user = args[1];
               String pass = args[2];
-              Double salarioBruto = 0d;
-              if(args.length > 3){
-                salarioBruto = new Double(args[3]);
-              }
                 
-            PlanilhaUtils planilhaUtils = new PlanilhaUtils(path, user, pass, salarioBruto);
+            PlanilhaUtils planilhaUtils = new PlanilhaUtils(path, user, pass);
             planilhaUtils.preencherPlanilha();
             
         } catch (Exception e) {
